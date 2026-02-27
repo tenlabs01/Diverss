@@ -52,7 +52,9 @@ export async function sendLeadToGoogleSheets({
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2500);
+  // Apps Script webhooks can be slow on cold start.
+  const timeoutMs = 30000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(webhookUrl, {
@@ -80,6 +82,11 @@ export async function sendLeadToGoogleSheets({
     }
 
     return { sent: true };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Google Sheets webhook timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }

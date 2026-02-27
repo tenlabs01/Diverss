@@ -45,7 +45,7 @@ app.post("/api/stocksense/analyze", async (req, res) => {
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
   try {
-    await sendLeadToGoogleSheets({
+    const leadCapturePromise = sendLeadToGoogleSheets({
       userDetails: normalizedDetails.data,
       portfolioDescription,
       source: "stocksense-local-server",
@@ -59,6 +59,8 @@ app.post("/api/stocksense/analyze", async (req, res) => {
       apiKey,
       model,
     });
+
+    await leadCapturePromise;
     return res.json({ result });
   } catch (error) {
     if (error instanceof UpstreamHttpError) {
