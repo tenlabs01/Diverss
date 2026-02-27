@@ -1,0 +1,57 @@
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Open Sans", ui-sans-serif, sans-serif;
+  background: radial-gradient(circle at top, #ffffff 0%, #f0f2f9 35%, #e9edf6 70%, #e5eaf4 100%);
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Open Sans", ui-sans-serif, sans-serif;
+}
+
+.app-shell {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(246, 247, 251, 0.7));
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.gradient-ring {
+  background: conic-gradient(from 180deg at 50% 50%, #24d3b6, #2b7fff, #24d3b6);
+}
+
+.modal-backdrop {
+  background: rgba(8, 14, 28, 0.7);
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+}
