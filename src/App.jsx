@@ -176,9 +176,14 @@ export default function App() {
               <span className="accent">Diverss</span>ify your portfolio
             </h1>
             <p className="subtitle">understand the power of diversification to create long-term wealth</p>
-            <a className="btn primary" href="#analyse">
-              Analyse Portfolio
-            </a>
+            <div className="hero-actions">
+              <a className="btn primary" href="#analyse">
+                Analyse Stock Portfolio
+              </a>
+              <a className="btn ghost" href="/portfolio-analyzer/index.html">
+                Analyse Diversification
+              </a>
+            </div>
           </div>
           <div className="hero-visual">
             <img
