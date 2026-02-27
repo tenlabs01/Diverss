@@ -254,19 +254,20 @@ main {
   line-height: 1.6;
 }
 
-.analyse {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 40px;
+.stocksense-section {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
 }
 
 .stocksense-shell {
-  margin-top: 24px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: #fff;
-  box-shadow: var(--shadow);
-  padding: 12px;
+  margin-top: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
 }
 
 .stocksense-frame {
@@ -767,10 +768,6 @@ main {
 @media (max-width: 700px) {
   main {
     padding: 28px 6vw 70px;
-  }
-
-  .analyse {
-    padding: 28px;
   }
 
   .hero h1 {

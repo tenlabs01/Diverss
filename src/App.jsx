@@ -187,7 +187,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="section analyse" id="analyse">
+        <section className="section stocksense-section" id="analyse">
           <div className="stocksense-shell">
             <iframe
               className="stocksense-frame"
