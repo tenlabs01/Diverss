@@ -165,6 +165,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
+  const [uploadedFileName, setUploadedFileName] = useState("");
   const [isEmbedded, setIsEmbedded] = useState(false);
   const fileRef = useRef();
   const shellRef = useRef(null);
@@ -186,6 +187,37 @@ JIOFIN,530,355.21,256.25`;
       headers.forEach((h, i) => row[h] = vals[i]);
       return row;
     });
+  };
+
+  const downloadSampleCsv = () => {
+    const blob = new Blob([`${SAMPLE}\n`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "stocksense-sample.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleUploadClick = () => {
+    fileRef.current?.click();
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setPortfolioText(text);
+      setUploadedFileName(file.name);
+      setError("");
+    } catch {
+      setError("Unable to read CSV file. Please try again.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const analyze = async () => {
@@ -391,19 +423,43 @@ JIOFIN,530,355.21,256.25`;
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "#93a7cc" }}>
-                  Paste Portfolio CSV
+                  Paste or Upload Portfolio CSV
                 </label>
-                <button
-                  onClick={() => setPortfolioText(SAMPLE)}
-                  style={{
-                    background: "#182740", border: "1px solid #2d4265",
-                    color: "#38bdf8", padding: "5px 12px", borderRadius: 6,
-                    cursor: "pointer", fontSize: 12, fontWeight: 600,
-                  }}
-                >
-                  Load Sample
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <button
+                    onClick={downloadSampleCsv}
+                    style={{
+                      background: "#182740", border: "1px solid #2d4265",
+                      color: "#38bdf8", padding: "5px 12px", borderRadius: 6,
+                      cursor: "pointer", fontSize: 12, fontWeight: 600,
+                    }}
+                  >
+                    Download Sample CSV
+                  </button>
+                  <button
+                    onClick={handleUploadClick}
+                    style={{
+                      background: "#182740", border: "1px solid #2d4265",
+                      color: "#38bdf8", padding: "5px 12px", borderRadius: 6,
+                      cursor: "pointer", fontSize: 12, fontWeight: 600,
+                    }}
+                  >
+                    Upload CSV
+                  </button>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleFileUpload}
+                    style={{ display: "none" }}
+                  />
+                </div>
               </div>
+              {uploadedFileName && (
+                <div style={{ fontSize: 12, color: "#9fb0d1", marginBottom: 10 }}>
+                  Loaded file: <span style={{ color: "#38bdf8", fontWeight: 600 }}>{uploadedFileName}</span>
+                </div>
+              )}
               <textarea
                 value={portfolioText}
                 onChange={e => setPortfolioText(e.target.value)}
