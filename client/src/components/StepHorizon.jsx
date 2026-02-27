@@ -1,5 +1,7 @@
 import InputCard from "./InputCard.jsx";
 
+const DEFAULT_HORIZON = "3-7 years";
+
 const options = [
   {
     title: "< 3 years",
@@ -20,7 +22,14 @@ const options = [
 ];
 
 export default function StepHorizon({ value, onSelect, onNext }) {
-  const canContinue = Boolean(value);
+  const selectedValue = value || DEFAULT_HORIZON;
+
+  const handleContinue = () => {
+    if (!value) {
+      onSelect(DEFAULT_HORIZON);
+    }
+    onNext();
+  };
 
   return (
     <div className="space-y-6">
@@ -36,14 +45,13 @@ export default function StepHorizon({ value, onSelect, onNext }) {
             key={option.title}
             title={option.title}
             description={option.description}
-            selected={value === option.title}
+            selected={selectedValue === option.title}
             onClick={() => onSelect(option.title)}
           />
         ))}
       </div>
       <button
-        onClick={onNext}
-        disabled={!canContinue}
+        onClick={handleContinue}
         className="rounded-full bg-ink-900 px-8 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:-translate-y-0.5 hover:bg-ink-800 disabled:cursor-not-allowed disabled:bg-ink-600"
       >
         Continue
