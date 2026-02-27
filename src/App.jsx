@@ -73,7 +73,7 @@ const communityCards = [
 ]
 
 const formspreeEndpoint = 'https://formspree.io/f/xkozdpee'
-const portfolioAnalyzerUrl = 'http://localhost:5173'
+const portfolioAnalyzerUrl = '/portfolio-analyzer/index.html'
 
 const currency = new Intl.NumberFormat('en-IN', {
   style: 'currency',
