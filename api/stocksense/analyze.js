@@ -2,6 +2,11 @@ import {
   analyzeStockSensePortfolio,
   UpstreamHttpError,
 } from "../../server/lib/stocksenseEngine.js";
+import {
+  extractRequestMeta,
+  normalizeUserDetails,
+  sendLeadToGoogleSheets,
+} from "../../server/lib/leads.js";
 
 export const config = {
   maxDuration: 60,
@@ -23,6 +28,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing portfolioDescription." });
   }
 
+  const normalizedDetails = normalizeUserDetails(req.body?.userDetails || {});
+  if (!normalizedDetails.valid) {
+    return res.status(400).json({ error: normalizedDetails.error });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY." });
@@ -31,6 +41,15 @@ export default async function handler(req, res) {
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
   try {
+    await sendLeadToGoogleSheets({
+      userDetails: normalizedDetails.data,
+      portfolioDescription,
+      source: "stocksense-vercel",
+      meta: extractRequestMeta(req),
+    }).catch((err) => {
+      console.error("Lead capture failed:", err?.message || err);
+    });
+
     const result = await analyzeStockSensePortfolio({
       portfolioDescription,
       apiKey,

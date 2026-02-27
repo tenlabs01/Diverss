@@ -161,6 +161,11 @@ function StockCard({ stock, index }) {
 
 export default function App() {
   const [step, setStep] = useState("upload"); // upload | analyzing | results
+  const [userDetails, setUserDetails] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
   const [portfolioText, setPortfolioText] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -176,6 +181,13 @@ IREDA,920,204.66,124.75
 TATATECH,165,912.61,583.00
 OLAELEC,2270,51.09,25.15
 JIOFIN,530,355.21,256.25`;
+
+  const trimmedName = userDetails.name.trim();
+  const trimmedEmail = userDetails.email.trim();
+  const cleanedPhone = userDetails.phone.replace(/\D/g, "");
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+  const isPhoneValid = cleanedPhone.length >= 10 && cleanedPhone.length <= 15;
+  const isDetailsValid = Boolean(trimmedName) && isEmailValid && isPhoneValid;
 
   const parsePortfolio = (text) => {
     const lines = text.trim().split("\n").filter(l => l.trim());
@@ -221,6 +233,11 @@ JIOFIN,530,355.21,256.25`;
   };
 
   const analyze = async () => {
+    if (!isDetailsValid) {
+      setError("Please enter valid name, email, and phone number before analysis.");
+      return;
+    }
+
     const parsed = parsePortfolio(portfolioText);
     if (!parsed || parsed.length === 0) {
       setError("Could not parse portfolio. Please check the format.");
@@ -240,7 +257,14 @@ JIOFIN,530,355.21,256.25`;
       const resp = await fetch(STOCKSENSE_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ portfolioDescription: portfolioDesc })
+        body: JSON.stringify({
+          portfolioDescription: portfolioDesc,
+          userDetails: {
+            name: trimmedName,
+            email: trimmedEmail,
+            phone: cleanedPhone,
+          },
+        })
       });
 
       const data = await resp.json().catch(() => ({}));
@@ -421,6 +445,70 @@ JIOFIN,530,355.21,256.25`;
               background: "#111a2e", border: "1px solid #24324d",
               borderRadius: 16, padding: isEmbedded ? 18 : 24, marginBottom: 16,
             }}>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 14, fontWeight: 600, color: "#93a7cc", display: "block", marginBottom: 10 }}>
+                  Your Details (required)
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
+                  <input
+                    type="text"
+                    placeholder="Full name"
+                    value={userDetails.name}
+                    onChange={(e) => {
+                      setUserDetails((prev) => ({ ...prev, name: e.target.value }));
+                      setError("");
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "#0b1427",
+                      border: "1px solid #24324d",
+                      borderRadius: 8,
+                      color: "#eef4ff",
+                      fontSize: 13,
+                      padding: "10px 12px",
+                      fontFamily: "'Gothic A1', sans-serif",
+                    }}
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={userDetails.email}
+                    onChange={(e) => {
+                      setUserDetails((prev) => ({ ...prev, email: e.target.value }));
+                      setError("");
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "#0b1427",
+                      border: "1px solid #24324d",
+                      borderRadius: 8,
+                      color: "#eef4ff",
+                      fontSize: 13,
+                      padding: "10px 12px",
+                      fontFamily: "'Gothic A1', sans-serif",
+                    }}
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Phone number"
+                    value={userDetails.phone}
+                    onChange={(e) => {
+                      setUserDetails((prev) => ({ ...prev, phone: e.target.value }));
+                      setError("");
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "#0b1427",
+                      border: "1px solid #24324d",
+                      borderRadius: 8,
+                      color: "#eef4ff",
+                      fontSize: 13,
+                      padding: "10px 12px",
+                      fontFamily: "'Gothic A1', sans-serif",
+                    }}
+                  />
+                </div>
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "#93a7cc" }}>
                   Paste or Upload Portfolio CSV
@@ -487,14 +575,14 @@ JIOFIN,530,355.21,256.25`;
 
             <button
               onClick={analyze}
-              disabled={!portfolioText.trim()}
+              disabled={!portfolioText.trim() || !isDetailsValid}
               style={{
                 width: "100%", padding: "14px 24px",
-                background: portfolioText.trim()
+                background: portfolioText.trim() && isDetailsValid
                   ? "linear-gradient(135deg, #38bdf8, #3b82f6)"
                   : "#24324d",
-                border: "none", borderRadius: 10, color: portfolioText.trim() ? "#fff" : "#6f7fa3",
-                fontSize: 15, fontWeight: 700, cursor: portfolioText.trim() ? "pointer" : "not-allowed",
+                border: "none", borderRadius: 10, color: portfolioText.trim() && isDetailsValid ? "#fff" : "#6f7fa3",
+                fontSize: 15, fontWeight: 700, cursor: portfolioText.trim() && isDetailsValid ? "pointer" : "not-allowed",
                 transition: "all 0.3s", letterSpacing: 0.5,
               }}
             >
