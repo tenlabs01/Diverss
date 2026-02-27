@@ -222,11 +222,11 @@ export default function App() {
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-ink-600">
               Portfolio Analyzer
             </p>
-            <h1 className="text-2xl font-semibold text-ink-900">Modern Portfolio Intelligence</h1>
+            <h1 className="text-2xl font-semibold text-ink-900">Diverss Portfolio Intelligence</h1>
           </div>
           <div className="hidden items-center gap-2 text-sm text-ink-600 sm:flex">
             <span className="h-2 w-2 rounded-full bg-mint-500" />
-            Secure local analysis
+            Secure Stock Analysis
           </div>
         </header>
 

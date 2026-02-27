@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const STOCKSENSE_API = API_BASE
   ? `${API_BASE}/api/stocksense/analyze`
@@ -165,7 +165,9 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
+  const [isEmbedded, setIsEmbedded] = useState(false);
   const fileRef = useRef();
+  const shellRef = useRef(null);
 
   const SAMPLE = `Symbol,Quantity,AvgPrice,LTP
 BAJAJHFL,2216,126.83,87.57
@@ -230,9 +232,53 @@ JIOFIN,530,355.21,256.25`;
     return acc;
   }, {}) : {};
 
+  useEffect(() => {
+    try {
+      setIsEmbedded(window.self !== window.top);
+    } catch {
+      setIsEmbedded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isEmbedded) return;
+    const node = shellRef.current;
+    if (!node) return;
+
+    let rafId;
+    const postHeight = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const nextHeight = Math.ceil(node.scrollHeight);
+        if (nextHeight > 0) {
+          window.parent.postMessage({ type: "stocksense:height", height: nextHeight }, "*");
+        }
+      });
+    };
+
+    const onMessage = (event) => {
+      if (event?.data?.type === "stocksense:measure") {
+        postHeight();
+      }
+    };
+
+    const observer = new ResizeObserver(postHeight);
+    observer.observe(node);
+    window.addEventListener("message", onMessage);
+    window.addEventListener("resize", postHeight);
+    postHeight();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("resize", postHeight);
+      cancelAnimationFrame(rafId);
+    };
+  }, [isEmbedded]);
+
   return (
-    <div style={{
-      minHeight: "100vh",
+    <div ref={shellRef} style={{
+      minHeight: isEmbedded ? "auto" : "100vh",
       background: "#070c19",
       fontFamily: "'Gothic A1', sans-serif",
       color: "#eef4ff",
@@ -255,7 +301,7 @@ JIOFIN,530,355.21,256.25`;
       {/* Header */}
       <div style={{
         borderBottom: "1px solid #24324d",
-        padding: "20px 32px",
+        padding: isEmbedded ? "14px 20px" : "20px 32px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -273,7 +319,7 @@ JIOFIN,530,355.21,256.25`;
               <div style={{ fontFamily: "'Gothic A1', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>
                 StockSense <span style={{ color: "#38bdf8" }}>by Diverss</span>
               </div>
-              <div style={{ fontSize: 11, color: "#6f7fa3" }}>Rule-Based Portfolio Intelligence</div>
+              <div style={{ fontSize: 11, color: "#6f7fa3" }}>AI Powered Portfolio Intelligence</div>
             </div>
           </div>
         </div>
@@ -292,12 +338,12 @@ JIOFIN,530,355.21,256.25`;
         )}
       </div>
 
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 20px" }}>
+      <div style={{ maxWidth: isEmbedded ? 860 : 900, margin: "0 auto", padding: isEmbedded ? "20px 14px 24px" : "32px 20px" }}>
 
         {/* UPLOAD STEP */}
         {step === "upload" && (
           <div style={{ animation: "fadeIn 0.5s ease" }}>
-            <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <div style={{ textAlign: "center", marginBottom: isEmbedded ? 28 : 40 }}>
               <h1 style={{
                 fontSize: 36, fontWeight: 700, margin: 0,
                 background: "linear-gradient(135deg, #eef4ff 0%, #38bdf8 50%, #3b82f6 100%)",
@@ -308,14 +354,14 @@ JIOFIN,530,355.21,256.25`;
                 AI Portfolio Analyzer
               </h1>
               <p style={{ color: "#9fb0d1", marginTop: 10, fontSize: 15 }}>
-                Upload your holdings. Get rule-based analysis powered by Claude AI.
+                Upload your holdings. Get deep analysis powered by AI.
               </p>
             </div>
 
             {/* Rules summary */}
             <div style={{
               display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8,
-              marginBottom: 32,
+              marginBottom: isEmbedded ? 20 : 32,
             }}>
               {[
                 { label: "ROCE/PE", weight: "25%", icon: "📈" },
@@ -341,7 +387,7 @@ JIOFIN,530,355.21,256.25`;
             {/* Input area */}
             <div style={{
               background: "#111a2e", border: "1px solid #24324d",
-              borderRadius: 16, padding: 24, marginBottom: 16,
+              borderRadius: 16, padding: isEmbedded ? 18 : 24, marginBottom: 16,
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "#93a7cc" }}>
@@ -403,7 +449,7 @@ JIOFIN,530,355.21,256.25`;
 
         {/* ANALYZING STEP */}
         {step === "analyzing" && (
-          <div style={{ textAlign: "center", padding: "80px 0", animation: "fadeIn 0.5s ease" }}>
+          <div style={{ textAlign: "center", padding: isEmbedded ? "52px 0" : "80px 0", animation: "fadeIn 0.5s ease" }}>
             <div style={{
               width: 80, height: 80, margin: "0 auto 24px",
               border: "3px solid #24324d", borderTopColor: "#38bdf8",

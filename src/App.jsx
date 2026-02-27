@@ -35,71 +35,41 @@ const formspreeEndpoint = 'https://formspree.io/f/xkozdpee'
 export default function App() {
   const [meetingStatus, setMeetingStatus] = useState('idle')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [stocksenseHeight, setStocksenseHeight] = useState(980)
+  const [stocksenseHeight, setStocksenseHeight] = useState(760)
   const stocksenseFrameRef = useRef(null)
 
   useEffect(() => {
+    const onMessage = (event) => {
+      const payload = event?.data
+      if (!payload || payload.type !== 'stocksense:height') return
+      const incomingHeight = Number(payload.height || 0)
+      if (!Number.isFinite(incomingHeight) || incomingHeight <= 0) return
+      const minHeight = window.innerWidth <= 700 ? 560 : 620
+      const maxHeight = 1800
+      const nextHeight = Math.max(minHeight, Math.min(maxHeight, incomingHeight + 8))
+      setStocksenseHeight(nextHeight)
+    }
+
+    const onResize = () => {
+      const iframe = stocksenseFrameRef.current
+      if (!iframe?.contentWindow) return
+      iframe.contentWindow.postMessage({ type: 'stocksense:measure' }, '*')
+    }
+
+    window.addEventListener('message', onMessage)
+    window.addEventListener('resize', onResize)
+
     const iframe = stocksenseFrameRef.current
-    if (!iframe) return
-
-    let observer
-    let rafId
-
-    const syncHeight = () => {
-      try {
-        const doc = iframe.contentDocument
-        if (!doc) return
-
-        const body = doc.body
-        const html = doc.documentElement
-        const nextHeight = Math.max(
-          body?.scrollHeight || 0,
-          body?.offsetHeight || 0,
-          html?.clientHeight || 0,
-          html?.scrollHeight || 0,
-          html?.offsetHeight || 0
-        )
-
-        if (nextHeight > 0) {
-          const minHeight = window.innerWidth <= 700 ? 760 : 860
-          setStocksenseHeight(Math.max(nextHeight, minHeight))
-        }
-      } catch {
-        // Same-origin is expected; ignore if document is temporarily unavailable.
-      }
-    }
-
-    const scheduleSync = () => {
-      cancelAnimationFrame(rafId)
-      rafId = requestAnimationFrame(syncHeight)
-    }
-
     const onLoad = () => {
-      syncHeight()
-      const doc = iframe.contentDocument
-      if (doc?.body) {
-        observer = new MutationObserver(scheduleSync)
-        observer.observe(doc.body, {
-          subtree: true,
-          childList: true,
-          attributes: true,
-          characterData: true,
-        })
-      }
+      if (!iframe?.contentWindow) return
+      iframe.contentWindow.postMessage({ type: 'stocksense:measure' }, '*')
     }
-
-    iframe.addEventListener('load', onLoad)
-    window.addEventListener('resize', scheduleSync)
-
-    if (iframe.contentDocument?.readyState === 'complete') {
-      onLoad()
-    }
+    iframe?.addEventListener('load', onLoad)
 
     return () => {
-      iframe.removeEventListener('load', onLoad)
-      window.removeEventListener('resize', scheduleSync)
-      if (observer) observer.disconnect()
-      cancelAnimationFrame(rafId)
+      iframe?.removeEventListener('load', onLoad)
+      window.removeEventListener('message', onMessage)
+      window.removeEventListener('resize', onResize)
     }
   }, [])
 
@@ -180,7 +150,12 @@ export default function App() {
               <a className="btn primary" href="#analyse">
                 Analyse Stock Portfolio
               </a>
-              <a className="btn ghost" href="/portfolio-analyzer/index.html">
+              <a
+                className="btn ghost"
+                href="/portfolio-analyzer/index.html"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Analyse Diversification
               </a>
             </div>
@@ -214,10 +189,10 @@ export default function App() {
 
         <section className="section analyse" id="analyse">
           <div className="section-heading">
-            <h2>Analyse your portfolio with StockSense</h2>
+            <h2>Analyse your portfolio with Power of AI</h2>
             <p>
-              We have replaced the old Diverss risk analyser with StockSense AI.
-              Upload your holdings and get rule-based portfolio intelligence instantly.
+              Analyse your stock portfolio with the power of Artificial Intelligence blended with
+              DIVERSS market research rules and algorithms.
             </p>
           </div>
 

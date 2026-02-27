@@ -275,7 +275,7 @@ main {
   border-radius: 12px;
   background: #070c19;
   display: block;
-  min-height: 860px;
+  min-height: 620px;
 }
 
 .portfolio-grid {
@@ -761,7 +761,7 @@ main {
     align-items: flex-start;
   }
 
-  .stocksense-frame { min-height: 820px; }
+  .stocksense-frame { min-height: 580px; }
 }
 
 @media (max-width: 700px) {
@@ -818,5 +818,5 @@ main {
     gap: 6px;
   }
 
-  .stocksense-frame { min-height: 760px; }
+  .stocksense-frame { min-height: 520px; }
 }
