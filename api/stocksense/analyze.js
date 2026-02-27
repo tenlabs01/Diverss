@@ -23,12 +23,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing portfolioDescription." });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "Server is missing OPENAI_API_KEY." });
+    return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY." });
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
   try {
     const result = await analyzeStockSensePortfolio({

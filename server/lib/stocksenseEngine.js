@@ -126,34 +126,34 @@ function buildStockSensePrompt(portfolioDescription) {
 export async function analyzeStockSensePortfolio({
   portfolioDescription,
   apiKey,
-  model = "gpt-4.1-mini",
+  model = "claude-sonnet-4-20250514",
 }) {
   const userPrompt = buildStockSensePrompt(portfolioDescription);
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      "anthropic-version": "2023-06-01",
+      "x-api-key": apiKey,
     },
     body: JSON.stringify({
       model,
       temperature: 0.2,
       max_tokens: 4000,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: STOCKSENSE_RULES_CONTEXT },
-        { role: "user", content: userPrompt },
-      ],
+      system: STOCKSENSE_RULES_CONTEXT,
+      messages: [{ role: "user", content: userPrompt }],
     }),
   });
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const upstreamMessage = payload?.error?.message || "OpenAI request failed.";
+    const upstreamMessage = payload?.error?.message || "Anthropic request failed.";
     throw new UpstreamHttpError(response.status, upstreamMessage);
   }
 
-  const raw = payload?.choices?.[0]?.message?.content;
+  const raw = (payload?.content || [])
+    .map((block) => (block?.type === "text" ? block.text : ""))
+    .join("");
   const parsed = parseJsonObject(raw);
   if (!parsed) {
     throw new UpstreamHttpError(502, "Model response did not include valid JSON.");
