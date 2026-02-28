@@ -4,6 +4,8 @@ const STOCKSENSE_API = API_BASE
   ? `${API_BASE}/api/stocksense/analyze`
   : "/api/stocksense/analyze";
 
+const BATCH_SIZE = 10; // ✅ Max stocks per API call
+
 const VERDICT_STYLES = {
   "Strong Hold/Add": { bg: "#102a25", border: "#2dd4bf", text: "#2dd4bf", dot: "#2dd4bf" },
   "Hold": { bg: "#1a2a1a", border: "#84cc16", text: "#bef264", dot: "#84cc16" },
@@ -261,12 +263,39 @@ JIOFIN,530,355.21,256.25`;
     }
   };
 
+  // ✅ Helper: build description string for one row
+  const buildRowDesc = (r) =>
+    `${r.symbol || r.stock}: Qty=${r.quantity || r.qty}, AvgPrice=₹${r.avgprice || r["avg price"] || r.avgcost}, LTP=₹${r.ltp || r["last price"] || r.cmp || "unknown"}`;
+
+  // ✅ Helper: call API for a single batch
+  const analyzeBatch = async (rows, batchIndex) => {
+    const portfolioDesc = rows.map(buildRowDesc).join("\n");
+    const resp = await fetch(STOCKSENSE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        portfolioDescription: portfolioDesc,
+        batchIndex, // tells server to only capture lead on first batch
+        userDetails: {
+          name: trimmedName,
+          email: trimmedEmail,
+          phone: cleanedPhone,
+        },
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || "StockSense API request failed.");
+    if (!data?.result?.stocks || !Array.isArray(data.result.stocks)) {
+      throw new Error("Unexpected analysis response format.");
+    }
+    return data.result;
+  };
+
   const analyze = async () => {
     if (!isDetailsValid) {
       setError("Please enter valid name, email, and phone number before analysis.");
       return;
     }
-
     if (!parsedPortfolio || parsedPortfolio.length === 0) {
       setError("Could not parse portfolio. Please check the format.");
       return;
@@ -275,35 +304,46 @@ JIOFIN,530,355.21,256.25`;
     setStep("analyzing");
     setError("");
 
-    const portfolioDesc = parsedPortfolio.map(r =>
-      `${r.symbol || r.stock}: Qty=${r.quantity || r.qty}, AvgPrice=₹${r.avgprice || r["avg price"] || r.avgcost}, LTP=₹${r.ltp || r["last price"] || r.cmp || "unknown"}`
-    ).join("\n");
-
-    setProgress("Fetching fundamentals, news, and risk factors...");
-
     try {
-      const resp = await fetch(STOCKSENSE_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          portfolioDescription: portfolioDesc,
-          userDetails: {
-            name: trimmedName,
-            email: trimmedEmail,
-            phone: cleanedPhone,
-          },
-        })
-      });
-
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(data.error || "StockSense API request failed.");
-      }
-      if (!data?.result?.stocks || !Array.isArray(data.result.stocks)) {
-        throw new Error("Unexpected analysis response format.");
+      // ✅ Split into batches of BATCH_SIZE
+      const batches = [];
+      for (let i = 0; i < parsedPortfolio.length; i += BATCH_SIZE) {
+        batches.push(parsedPortfolio.slice(i, i + BATCH_SIZE));
       }
 
-      setResult(data.result);
+      const totalStocks = parsedPortfolio.length;
+      const totalBatches = batches.length;
+
+      setProgress(
+        totalBatches > 1
+          ? `Analyzing ${totalStocks} stocks across ${totalBatches} batches in parallel...`
+          : "Fetching fundamentals, news, and risk factors..."
+      );
+
+      // ✅ Fire all batches in parallel from frontend
+      const batchResults = await Promise.all(
+        batches.map((rows, i) => analyzeBatch(rows, i))
+      );
+
+      // ✅ Merge all batch results
+      const allStocks = batchResults.flatMap((r) => r.stocks || []);
+      const totalInvested = allStocks.reduce((s, x) => s + x.avgPrice * x.quantity, 0);
+      const currentValue = allStocks.reduce((s, x) => s + x.ltp * x.quantity, 0);
+      const totalPnL = currentValue - totalInvested;
+      const portfolioScore =
+        allStocks.reduce((s, x) => s + (x.weightedScore || 0), 0) / allStocks.length;
+
+      const mergedResult = {
+        summary: {
+          totalInvested: +totalInvested.toFixed(2),
+          currentValue: +currentValue.toFixed(2),
+          totalPnL: +totalPnL.toFixed(2),
+          portfolioScore: +portfolioScore.toFixed(2),
+        },
+        stocks: allStocks,
+      };
+
+      setResult(mergedResult);
       setStep("results");
     } catch (e) {
       setError("Analysis failed: " + e.message);
