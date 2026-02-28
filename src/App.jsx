@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import InstitutionalFlowDashboard from './InstitutionalFlowDashboard'
 
 const learnCards = [
   {
@@ -12,21 +13,6 @@ const learnCards = [
   {
     title: 'Goal-based planning',
     detail: 'Plan for milestones with clarity on time horizon and cash needs.',
-  },
-]
-
-const communityCards = [
-  {
-    title: 'Investor circles',
-    detail: 'Peer groups that share strategies, insights, and accountability.',
-  },
-  {
-    title: 'Expert AMAs',
-    detail: 'Live sessions with advisors, product specialists, and market analysts.',
-  },
-  {
-    title: 'Portfolio playbooks',
-    detail: 'Curated templates for different goals and risk profiles.',
   },
 ]
 
@@ -200,22 +186,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="section" id="community">
-          <div className="section-heading">
-            <h2>Community that helps you stay on track</h2>
-            <p>
-              Learn with peers, compare notes, and grow confidence in your portfolio choices.
-            </p>
-          </div>
-          <div className="card-grid">
-            {communityCards.map((item) => (
-              <div key={item.title} className="card">
-                <h3>{item.title}</h3>
-                <p>{item.detail}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <InstitutionalFlowDashboard />
 
         <section className="cta" id="expert">
           <div>
@@ -300,6 +271,7 @@ export default function App() {
             </div>
           </form>
         </section>
+
       </main>
 
       <footer className="site-footer">
