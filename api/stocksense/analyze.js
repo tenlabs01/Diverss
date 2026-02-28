@@ -23,9 +23,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const portfolioDescription = String(
-    req.body?.portfolioDescription || ""
-  ).trim();
+  const portfolioDescription = String(req.body?.portfolioDescription || "").trim();
   if (!portfolioDescription) {
     return res.status(400).json({ error: "Missing portfolioDescription." });
   }
@@ -37,17 +35,13 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res
-      .status(500)
-      .json({ error: "Server is missing ANTHROPIC_API_KEY." });
+    return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY." });
   }
 
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
-  // Only send lead on first batch (batchIndex === 0) to avoid duplicate leads
-  const batchIndex = Number(req.body?.batchIndex ?? 0);
-  if (batchIndex === 0) {
-    sendLeadToGoogleSheets({
+  try {
+    const leadCapturePromise = sendLeadToGoogleSheets({
       userDetails: normalizedDetails.data,
       portfolioDescription,
       source: "stocksense-vercel",
@@ -55,21 +49,20 @@ export default async function handler(req, res) {
     }).catch((err) => {
       console.error("Lead capture failed:", err?.message || err);
     });
-  }
 
-  try {
-    // ✅ Each request handles ONE batch of stocks (sent from frontend)
     const result = await analyzeStockSensePortfolio({
       portfolioDescription,
       apiKey,
       model,
     });
 
+    await leadCapturePromise;
     return res.status(200).json({ result });
   } catch (error) {
     if (error instanceof UpstreamHttpError) {
       return res.status(error.status).json({ error: error.message });
     }
+
     return res.status(500).json({
       error: error.message || "StockSense analysis failed.",
     });

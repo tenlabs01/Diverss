@@ -8,44 +8,55 @@ export class UpstreamHttpError extends Error {
 
 export const STOCKSENSE_RULES_CONTEXT = `
 You are a stock portfolio analyst. Analyze the given portfolio using these weighted rules:
+
 1. ROCE-to-PE Mapping (25% weight):
    - ROCE <10%: undervalued below PE 20
    - ROCE 10-20%: undervalued below PE 30
    - ROCE >20%: undervalued below PE 40
    - Rank 1-5 based on relative gap between current PE and threshold
+
 2. Market Cap (10% weight):
    - Large cap (>25000 Cr): Rank 4-5
    - Mid cap (5000-25000 Cr): Rank 3
    - Small cap (<5000 Cr): Rank 1-2
+
 3. Price-to-Book (10% weight):
    - Rank higher when P/B < 24M avg & sector avg
    - Rank lower when P/B > 10 or above sector avg
+
 4. Quarterly Revenue & Profitability Growth (15% weight):
    - Consistent positive growth 4 quarters: Rank 5
    - Large cap single-digit YoY growth: Rank 4
    - Mid/small cap double-digit YoY growth: Rank 4
    - Flat or negative growth: Rank 1-2
+
 5. Institutional Shareholding Trend (10% weight):
    - 12-month consistent FII+DII increase: Rank 5
    - 3-month substantial DII increase: Rank 4
    - Flat: Rank 2, Decreasing: Rank 1
+
 6. Liquidity/Turnover Ratio (10% weight):
    - Turnover ratio >=0.1% is considered liquid, rank higher
+
 7. RSI (15% weight):
    - RSI <30 (Oversold): Rank 5
    - RSI 30-45: Rank 4
    - RSI 45-55: Rank 3
    - RSI 55-70: Rank 2
    - RSI >70 (Overbought): Rank 1
+
 8. Event Sensitivity (5% weight):
    - Rank higher for upcoming earnings, policy changes, MSCI inclusion, positive analyst ratings
+
 For each stock in the portfolio, use your knowledge to:
 1. Estimate/score each factor (1-5)
 2. Calculate weighted total score out of 5
 3. Give a verdict: Strong Hold/Add, Hold, Reduce, Exit, Speculative
 4. Provide 2-3 lines of reasoning
 5. Identify the "hope factor" — what could drive recovery
+
 Also check recent news and catalysts.
+
 Return ONLY valid JSON in this exact format:
 {
   "summary": {
@@ -86,6 +97,7 @@ Return ONLY valid JSON in this exact format:
 
 function parseJsonObject(raw) {
   if (typeof raw !== "string" || !raw.trim()) return null;
+
   try {
     return JSON.parse(raw);
   } catch {
@@ -111,14 +123,12 @@ function buildStockSensePrompt(portfolioDescription) {
   ].join("\n");
 }
 
-// Analyzes a single batch of stocks (called once per batch from the API route)
 export async function analyzeStockSensePortfolio({
   portfolioDescription,
   apiKey,
   model = "claude-sonnet-4-20250514",
 }) {
   const userPrompt = buildStockSensePrompt(portfolioDescription);
-
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -129,64 +139,25 @@ export async function analyzeStockSensePortfolio({
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 4000, // ✅ 4000 is plenty for 10 stocks — faster response
-      stream: true,     // ✅ Streaming keeps connection alive
+      max_tokens: 4000,
       system: STOCKSENSE_RULES_CONTEXT,
       messages: [{ role: "user", content: userPrompt }],
     }),
   });
 
+  const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    const upstreamMessage =
-      payload?.error?.message || "Anthropic request failed.";
+    const upstreamMessage = payload?.error?.message || "Anthropic request failed.";
     throw new UpstreamHttpError(response.status, upstreamMessage);
   }
 
-  if (!response.body) {
-    throw new UpstreamHttpError(
-      502,
-      "Streaming not supported in this environment."
-    );
-  }
-
-  // Buffer streamed response into full text
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let fullText = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-
-    for (const line of chunk.split("\n")) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (data === "[DONE]") continue;
-      try {
-        const event = JSON.parse(data);
-        if (
-          event?.type === "content_block_delta" &&
-          event?.delta?.type === "text_delta"
-        ) {
-          fullText += event.delta.text;
-        }
-      } catch {
-        // skip malformed SSE lines
-      }
-    }
-  }
-
-  console.log(`Batch received ${fullText.length} chars`);
-
-  const parsed = parseJsonObject(fullText);
+  const raw = (payload?.content || [])
+    .map((block) => (block?.type === "text" ? block.text : ""))
+    .join("");
+  const parsed = parseJsonObject(raw);
   if (!parsed) {
-    throw new UpstreamHttpError(
-      502,
-      "Model response did not include valid JSON."
-    );
+    throw new UpstreamHttpError(502, "Model response did not include valid JSON.");
   }
+
   return parsed;
 }
