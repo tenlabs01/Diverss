@@ -1,5 +1,5 @@
 import {
-  analyzePortfolioInBatches, // ✅ Changed from analyzeStockSensePortfolio
+  analyzeStockSensePortfolio,
   UpstreamHttpError,
 } from "../../server/lib/stocksenseEngine.js";
 import {
@@ -42,11 +42,11 @@ export default async function handler(req, res) {
       .json({ error: "Server is missing ANTHROPIC_API_KEY." });
   }
 
-  const model =
-    process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
-  try {
-    // ✅ Fire and forget — don't await Google Sheets, it was blocking execution
+  // Only send lead on first batch (batchIndex === 0) to avoid duplicate leads
+  const batchIndex = Number(req.body?.batchIndex ?? 0);
+  if (batchIndex === 0) {
     sendLeadToGoogleSheets({
       userDetails: normalizedDetails.data,
       portfolioDescription,
@@ -55,13 +55,14 @@ export default async function handler(req, res) {
     }).catch((err) => {
       console.error("Lead capture failed:", err?.message || err);
     });
+  }
 
-    // ✅ Use batching for large portfolios (50+ stocks)
-    const result = await analyzePortfolioInBatches({
+  try {
+    // ✅ Each request handles ONE batch of stocks (sent from frontend)
+    const result = await analyzeStockSensePortfolio({
       portfolioDescription,
       apiKey,
       model,
-      batchSize: 10, // 10 stocks per Claude API call
     });
 
     return res.status(200).json({ result });
