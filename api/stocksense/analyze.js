@@ -41,22 +41,22 @@ export default async function handler(req, res) {
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
   try {
-    const leadCapturePromise = sendLeadToGoogleSheets({
-      userDetails: normalizedDetails.data,
-      portfolioDescription,
-      source: "stocksense-vercel",
-      meta: extractRequestMeta(req),
-    }).catch((err) => {
-      console.error("Lead capture failed:", err?.message || err);
-    });
+    sendLeadToGoogleSheets({   // ✅ Fire and forget — don't await
+  userDetails: normalizedDetails.data,
+  portfolioDescription,
+  source: "stocksense-vercel",
+  meta: extractRequestMeta(req),
+}).catch((err) => {
+  console.error("Lead capture failed:", err?.message || err);
+});
 
-    const result = await analyzeStockSensePortfolio({
-      portfolioDescription,
-      apiKey,
-      model,
-    });
+const result = await analyzeStockSensePortfolio({
+  portfolioDescription,
+  apiKey,
+  model,
+});
 
-    await leadCapturePromise;
+return res.status(200).json({ result });
     return res.status(200).json({ result });
   } catch (error) {
     if (error instanceof UpstreamHttpError) {
