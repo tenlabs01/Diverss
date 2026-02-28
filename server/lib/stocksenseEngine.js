@@ -139,7 +139,7 @@ export async function analyzeStockSensePortfolio({
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 150000,
+      max_tokens: 64000,
       system: STOCKSENSE_RULES_CONTEXT,
       messages: [{ role: "user", content: userPrompt }],
     }),
