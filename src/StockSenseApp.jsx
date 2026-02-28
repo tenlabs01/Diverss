@@ -4,20 +4,18 @@ const STOCKSENSE_API = API_BASE
   ? `${API_BASE}/api/stocksense/analyze`
   : "/api/stocksense/analyze";
 
-// ✅ Smart batch size based on portfolio size
 const getBatchSize = (total) => {
-  if (total <= 10) return total;   // 1-10:  single batch
-  if (total <= 30) return 8;       // 11-30: batches of 8
-  if (total <= 60) return 7;       // 31-60: batches of 7
-  return 6;                        // 60+:   batches of 6 (more batches, safer rate limits)
+  if (total <= 10) return total;
+  if (total <= 30) return 8;
+  if (total <= 60) return 7;
+  return 6;
 };
 
-// ✅ Delay between batches based on portfolio size
 const getBatchDelay = (total) => {
-  if (total <= 10) return 0;       // no delay for small
-  if (total <= 30) return 1000;    // 1s for medium
-  if (total <= 60) return 2000;    // 2s for large
-  return 3000;                     // 3s for very large (100+)
+  if (total <= 10) return 0;
+  if (total <= 30) return 1000;
+  if (total <= 60) return 2000;
+  return 3000;
 };
 
 const VERDICT_STYLES = {
@@ -47,6 +45,178 @@ const FACTORS = [
 
 const CSV_HEADER = "Symbol,Quantity,AvgPrice,LTP";
 const CSV_STARTER = `${CSV_HEADER}\n`;
+
+// ✅ PDF Generator — builds a print-ready HTML window
+const generatePDF = (stocks, summary) => {
+  const verdictColor = {
+    "Strong Hold/Add": { bg: "#102a25", border: "#2dd4bf", text: "#2dd4bf" },
+    "Hold": { bg: "#1a2a1a", border: "#84cc16", text: "#bef264" },
+    "Hold with Caution": { bg: "#302611", border: "#f59e0b", text: "#fcd34d" },
+    "Reduce": { bg: "#301d13", border: "#fb923c", text: "#fdba74" },
+    "Exit": { bg: "#2f1117", border: "#f87171", text: "#f87171" },
+    "Speculative": { bg: "#102538", border: "#38bdf8", text: "#38bdf8" },
+  };
+
+  const scoreColor = (v) => v >= 4 ? "#2dd4bf" : v >= 3 ? "#f59e0b" : v >= 2 ? "#fb923c" : "#f87171";
+
+  const scoreBar = (value) => {
+    const pct = (value / 5) * 100;
+    const color = scoreColor(value);
+    return `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+        <div style="flex:1;height:6px;background:#24324d;border-radius:3px;overflow:hidden;">
+          <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;"></div>
+        </div>
+        <span style="font-size:11px;color:${color};font-weight:700;min-width:16px;">${value}</span>
+      </div>`;
+  };
+
+  const stockCards = [...stocks]
+    .sort((a, b) => b.weightedScore - a.weightedScore)
+    .map((s) => {
+      const vc = verdictColor[s.verdict] || verdictColor["Hold"];
+      const isPos = s.pnl >= 0;
+      const pnlColor = isPos ? "#2dd4bf" : "#f87171";
+      const pnlText = `${isPos ? "+" : ""}₹${Math.abs(s.pnl).toLocaleString("en-IN", { maximumFractionDigits: 0 })} (${isPos ? "+" : ""}${s.pnlPercent?.toFixed(1)}%)`;
+      const scorePct = (s.weightedScore / 5) * 360;
+
+      return `
+      <div style="background:#111a2e;border:1.5px solid ${vc.border};border-radius:12px;padding:20px;margin-bottom:18px;page-break-inside:avoid;">
+        <!-- Header row -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+              <span style="font-size:18px;font-weight:700;color:#eef4ff;">${s.symbol}</span>
+              <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:${vc.bg};color:${vc.text};border:1px solid ${vc.border};">${s.verdict}</span>
+            </div>
+            <div style="font-size:12px;color:#9fb0d1;">${s.companyName}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <div style="text-align:right;">
+              <div style="font-size:20px;font-weight:700;color:#eef4ff;">&#8377;${s.ltp?.toLocaleString("en-IN")}</div>
+              <div style="font-size:12px;color:${pnlColor};font-weight:600;">${pnlText}</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="width:48px;height:48px;border-radius:50%;background:conic-gradient(${vc.border} ${scorePct}deg,#24324d 0deg);display:flex;align-items:center;justify-content:center;">
+                <div style="width:38px;height:38px;border-radius:50%;background:#111a2e;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${vc.text};">${s.weightedScore?.toFixed(1)}</div>
+              </div>
+              <div style="font-size:10px;color:#9fb0d1;margin-top:3px;">Score</div>
+            </div>
+            <div style="font-size:22px;">${HOPE_EMOJI[s.hopeLevel] || "🔅"}</div>
+          </div>
+        </div>
+
+        <!-- Body: factors + analysis -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+          <!-- Factor scores -->
+          <div>
+            <div style="font-size:10px;color:#9fb0d1;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Factor Scores</div>
+            ${FACTORS.map(f => `
+              <div style="margin-bottom:6px;">
+                <div style="font-size:11px;color:#93a7cc;margin-bottom:3px;">${f.label} <span style="color:#6f7fa3;">(${f.weight})</span></div>
+                ${scoreBar(s.scores?.[f.key] || 0)}
+              </div>`).join("")}
+          </div>
+          <!-- Analysis -->
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <div style="font-size:10px;color:#9fb0d1;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Analysis</div>
+              <p style="font-size:12px;color:#93a7cc;line-height:1.6;margin:0;">${s.reasoning}</p>
+            </div>
+            <div style="background:${vc.bg};border:1px solid ${vc.border}44;border-radius:8px;padding:10px;">
+              <div style="font-size:11px;color:${vc.text};font-weight:700;margin-bottom:4px;">${HOPE_EMOJI[s.hopeLevel]} Hope Factor</div>
+              <p style="font-size:12px;color:#93a7cc;line-height:1.5;margin:0;">${s.hopeFactor}</p>
+            </div>
+            <div style="background:#0b1427;border:1px solid #24324d;border-radius:8px;padding:10px;">
+              <div style="font-size:11px;color:#9fb0d1;font-weight:700;margin-bottom:4px;">&#128�; Latest News</div>
+              <p style="font-size:12px;color:#93a7cc;line-height:1.5;margin:0;">${s.latestNews}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats row -->
+        <div style="display:flex;gap:10px;padding-top:12px;border-top:1px solid #24324d;">
+          ${[["QTY", s.quantity], ["AVG", `&#8377;${s.avgPrice?.toFixed(2)}`], ["LTP", `&#8377;${s.ltp?.toLocaleString("en-IN")}`], ["INVESTED", `&#8377;${(s.quantity * s.avgPrice)?.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`]].map(([l, v]) => `
+            <div style="background:#0b1427;border-radius:8px;padding:8px 12px;min-width:80px;">
+              <div style="font-size:9px;color:#6f7fa3;text-transform:uppercase;letter-spacing:1px;">${l}</div>
+              <div style="font-size:13px;font-weight:700;color:#eef4ff;">${v}</div>
+            </div>`).join("")}
+        </div>
+      </div>`;
+    }).join("");
+
+  const pnlColor = summary.totalPnL >= 0 ? "#2dd4bf" : "#f87171";
+  const date = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>StockSense Portfolio Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #070c19; color: #eef4ff; font-family: 'Gothic A1', sans-serif; padding: 32px; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { size: A4; margin: 15mm; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid #24324d;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#38bdf8,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:22px;">&#128202;</div>
+      <div>
+        <div style="font-size:22px;font-weight:700;">StockSense <span style="color:#38bdf8;">by Diverss</span></div>
+        <div style="font-size:11px;color:#6f7fa3;">AI Powered Portfolio Intelligence Report</div>
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:12px;color:#6f7fa3;">Generated on</div>
+      <div style="font-size:13px;color:#9fb0d1;font-weight:600;">${date}</div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;">
+    ${[
+      ["Invested", `&#8377;${(summary.totalInvested / 100000).toFixed(2)}L`, "#93a7cc"],
+      ["Current Value", `&#8377;${(summary.currentValue / 100000).toFixed(2)}L`, "#93a7cc"],
+      ["Total P&L", `${summary.totalPnL >= 0 ? "+" : ""}&#8377;${Math.abs(summary.totalPnL / 100000).toFixed(2)}L`, pnlColor],
+      ["Portfolio Score", `${summary.portfolioScore?.toFixed(1)}/5`, "#38bdf8"],
+    ].map(([l, v, c]) => `
+      <div style="background:#111a2e;border:1px solid #24324d;border-radius:12px;padding:16px;text-align:center;">
+        <div style="font-size:10px;color:#6f7fa3;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">${l}</div>
+        <div style="font-size:20px;font-weight:700;color:${c};">${v}</div>
+      </div>`).join("")}
+  </div>
+
+  <!-- Stock count -->
+  <div style="font-size:13px;color:#6f7fa3;margin-bottom:20px;">
+    ${stocks.length} stocks analyzed — sorted by weighted score (highest first)
+  </div>
+
+  <!-- Stock cards -->
+  ${stockCards}
+
+  <!-- Footer -->
+  <div style="margin-top:24px;padding:12px 16px;background:#111a2e;border:1px solid #24324d;border-radius:8px;font-size:11px;color:#6f7fa3;text-align:center;">
+    &#9888;&#65039; This report is for informational purposes only and does not constitute financial advice. Consult a SEBI-registered investment advisor before making investment decisions.
+  </div>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => {
+    setTimeout(() => {
+      win.print();
+    }, 800); // wait for fonts to load
+  };
+};
 
 function ScoreBar({ value }) {
   const pct = (value / 5) * 100;
@@ -142,7 +312,6 @@ function StockCard({ stock, isNew }) {
   );
 }
 
-// ✅ Smart progress bar with ETA
 function ProgressBar({ done, total, currentBatch, totalBatches, waitingMsg }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const remaining = total - done;
@@ -150,14 +319,8 @@ function ProgressBar({ done, total, currentBatch, totalBatches, waitingMsg }) {
     <div style={{ background: "#111a2e", border: "1px solid #24324d", borderRadius: 12, padding: "16px 20px", marginBottom: 20, animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {waitingMsg ? (
-            <span style={{ fontSize: 16 }}>⏳</span>
-          ) : (
-            <div style={{ width: 16, height: 16, border: "2px solid #24324d", borderTopColor: "#38bdf8", borderRadius: "50%", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
-          )}
-          <span style={{ fontSize: 13, color: "#eef4ff", fontWeight: 600 }}>
-            {waitingMsg || `Analyzing batch ${currentBatch} of ${totalBatches}...`}
-          </span>
+          {waitingMsg ? <span style={{ fontSize: 16 }}>⏳</span> : <div style={{ width: 16, height: 16, border: "2px solid #24324d", borderTopColor: "#38bdf8", borderRadius: "50%", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />}
+          <span style={{ fontSize: 13, color: "#eef4ff", fontWeight: 600 }}>{waitingMsg || `Analyzing batch ${currentBatch} of ${totalBatches}...`}</span>
         </div>
         <span style={{ fontSize: 13, color: "#38bdf8", fontWeight: 700 }}>{done} / {total} stocks</span>
       </div>
@@ -179,8 +342,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [uploadedFileName, setUploadedFileName] = useState("");
   const [isEmbedded, setIsEmbedded] = useState(false);
-
-  // Progressive state
   const [streamedStocks, setStreamedStocks] = useState([]);
   const [newStockSymbols, setNewStockSymbols] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -189,11 +350,11 @@ export default function App() {
   const [currentBatch, setCurrentBatch] = useState(0);
   const [totalBatches, setTotalBatches] = useState(0);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [waitingMsg, setWaitingMsg] = useState("");  // ✅ rate limit wait message
+  const [waitingMsg, setWaitingMsg] = useState("");
 
   const fileRef = useRef();
   const shellRef = useRef(null);
-  const abortRef = useRef(false); // ✅ to cancel mid-analysis
+  const abortRef = useRef(false);
 
   const SAMPLE = `${CSV_HEADER}\nBAJAJHFL,2216,126.83,87.57\nIREDA,920,204.66,124.75\nTATATECH,165,912.61,583.00\nOLAELEC,2270,51.09,25.15\nJIOFIN,530,355.21,256.25`;
 
@@ -241,7 +402,6 @@ export default function App() {
   const buildRowDesc = (r) =>
     `${r.symbol || r.stock}: Qty=${r.quantity || r.qty}, AvgPrice=₹${r.avgprice || r["avg price"] || r.avgcost}, LTP=₹${r.ltp || r["last price"] || r.cmp || "unknown"}`;
 
-  // ✅ Analyze one batch with automatic retry on rate limit
   const analyzeBatch = async (rows, batchIndex, retryCount = 0) => {
     const portfolioDesc = rows.map(buildRowDesc).join("\n");
     const resp = await fetch(STOCKSENSE_API, {
@@ -253,117 +413,70 @@ export default function App() {
         userDetails: { name: trimmedName, email: trimmedEmail, phone: cleanedPhone },
       }),
     });
-
-    // ✅ Rate limit hit — wait and retry automatically
     if (resp.status === 429 && retryCount < 3) {
-      const waitSecs = (retryCount + 1) * 20; // 20s, 40s, 60s
+      const waitSecs = (retryCount + 1) * 20;
       setWaitingMsg(`Rate limit reached — retrying in ${waitSecs}s...`);
       await new Promise(r => setTimeout(r, waitSecs * 1000));
       setWaitingMsg("");
       return analyzeBatch(rows, batchIndex, retryCount + 1);
     }
-
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || "StockSense API request failed.");
-    if (!data?.result?.stocks || !Array.isArray(data.result.stocks)) {
-      throw new Error("Unexpected analysis response format.");
-    }
+    if (!data?.result?.stocks || !Array.isArray(data.result.stocks)) throw new Error("Unexpected analysis response format.");
     return data.result;
   };
 
   const analyze = async () => {
     if (!isDetailsValid) { setError("Please enter valid name, email, and phone number."); return; }
     if (!parsedPortfolio || parsedPortfolio.length === 0) { setError("Could not parse portfolio."); return; }
-
-    // Reset everything
-    setStreamedStocks([]);
-    setNewStockSymbols([]);
-    setSummary(null);
-    setError("");
-    setProgressDone(0);
-    setWaitingMsg("");
+    setStreamedStocks([]); setNewStockSymbols([]); setSummary(null);
+    setError(""); setProgressDone(0); setWaitingMsg("");
     abortRef.current = false;
-
     const total = parsedPortfolio.length;
-    const batchSize = getBatchSize(total);   // ✅ smart batch size
-    const batchDelay = getBatchDelay(total); // ✅ smart delay
-
+    const batchSize = getBatchSize(total);
+    const batchDelay = getBatchDelay(total);
     const batches = [];
-    for (let i = 0; i < parsedPortfolio.length; i += batchSize) {
-      batches.push(parsedPortfolio.slice(i, i + batchSize));
-    }
-
-    setProgressTotal(total);
-    setTotalBatches(batches.length);
-    setCurrentBatch(1);
-    setIsStreaming(true);
-    setStep("streaming");
-
+    for (let i = 0; i < parsedPortfolio.length; i += batchSize) batches.push(parsedPortfolio.slice(i, i + batchSize));
+    setProgressTotal(total); setTotalBatches(batches.length); setCurrentBatch(1);
+    setIsStreaming(true); setStep("streaming");
     try {
       let allStocks = [];
-
       for (let i = 0; i < batches.length; i++) {
-        if (abortRef.current) break; // ✅ user clicked New Analysis mid-stream
-
+        if (abortRef.current) break;
         setCurrentBatch(i + 1);
         const batchResult = await analyzeBatch(batches[i], i);
         const newStocks = batchResult.stocks || [];
-        const newSymbols = newStocks.map(s => s.symbol);
-
         allStocks = [...allStocks, ...newStocks];
         setStreamedStocks(prev => [...prev, ...newStocks]);
-        setNewStockSymbols(newSymbols);
+        setNewStockSymbols(newStocks.map(s => s.symbol));
         setProgressDone(allStocks.length);
-
-        // Clear glow after 3s
         setTimeout(() => setNewStockSymbols([]), 3000);
-
-        // ✅ Smart delay between batches
-        if (i < batches.length - 1 && batchDelay > 0) {
-          await new Promise(r => setTimeout(r, batchDelay));
-        }
+        if (i < batches.length - 1 && batchDelay > 0) await new Promise(r => setTimeout(r, batchDelay));
       }
-
       if (!abortRef.current) {
-        // Compute final summary
         const totalInvested = allStocks.reduce((s, x) => s + x.avgPrice * x.quantity, 0);
         const currentValue = allStocks.reduce((s, x) => s + x.ltp * x.quantity, 0);
         const totalPnL = currentValue - totalInvested;
         const portfolioScore = allStocks.reduce((s, x) => s + (x.weightedScore || 0), 0) / allStocks.length;
-
-        setSummary({
-          totalInvested: +totalInvested.toFixed(2),
-          currentValue: +currentValue.toFixed(2),
-          totalPnL: +totalPnL.toFixed(2),
-          portfolioScore: +portfolioScore.toFixed(2),
-        });
+        setSummary({ totalInvested: +totalInvested.toFixed(2), currentValue: +currentValue.toFixed(2), totalPnL: +totalPnL.toFixed(2), portfolioScore: +portfolioScore.toFixed(2) });
         setStep("results");
       }
-
     } catch (e) {
       setError("Analysis failed: " + e.message);
       if (streamedStocks.length === 0) setStep("upload");
     } finally {
-      setIsStreaming(false);
-      setWaitingMsg("");
+      setIsStreaming(false); setWaitingMsg("");
     }
   };
 
-  const verdictCounts = streamedStocks.reduce((acc, s) => {
-    acc[s.verdict] = (acc[s.verdict] || 0) + 1;
-    return acc;
-  }, {});
-
   const handleNewAnalysis = () => {
     abortRef.current = true;
-    setStep("upload");
-    setStreamedStocks([]);
-    setSummary(null);
-    setPortfolioText(CSV_STARTER);
-    setError("");
-    setIsStreaming(false);
-    setWaitingMsg("");
+    setStep("upload"); setStreamedStocks([]); setSummary(null);
+    setPortfolioText(CSV_STARTER); setError(""); setIsStreaming(false); setWaitingMsg("");
   };
+
+  const verdictCounts = streamedStocks.reduce((acc, s) => { acc[s.verdict] = (acc[s.verdict] || 0) + 1; return acc; }, {});
+  const showResults = step === "streaming" || step === "results";
 
   useEffect(() => {
     try { setIsEmbedded(window.self !== window.top); } catch { setIsEmbedded(true); }
@@ -379,8 +492,6 @@ export default function App() {
     observer.observe(node); window.addEventListener("message", onMessage); window.addEventListener("resize", postHeight); postHeight();
     return () => { observer.disconnect(); window.removeEventListener("message", onMessage); window.removeEventListener("resize", postHeight); cancelAnimationFrame(rafId); };
   }, [isEmbedded]);
-
-  const showResults = step === "streaming" || step === "results";
 
   return (
     <div ref={shellRef} style={{ minHeight: isEmbedded ? "auto" : "100vh", background: "#070c19", fontFamily: "'Gothic A1', sans-serif", color: "#eef4ff" }}>
@@ -406,11 +517,23 @@ export default function App() {
           </div>
         </div>
         {showResults && (
-          <button onClick={handleNewAnalysis} style={{ background: "transparent", border: "1px solid #24324d", color: "#93a7cc", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, transition: "all 0.2s" }}
-            onMouseEnter={e => { e.target.style.borderColor = "#38bdf8"; e.target.style.color = "#eef4ff"; }}
-            onMouseLeave={e => { e.target.style.borderColor = "#24324d"; e.target.style.color = "#93a7cc"; }}>
-            ← New Analysis
-          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            {/* ✅ Download PDF button — only shown when analysis complete */}
+            {step === "results" && summary && (
+              <button
+                onClick={() => generatePDF(streamedStocks, summary)}
+                style={{ background: "linear-gradient(135deg, #38bdf8, #3b82f6)", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}
+              >
+                ⬇️ Download PDF
+              </button>
+            )}
+            <button onClick={handleNewAnalysis}
+              style={{ background: "transparent", border: "1px solid #24324d", color: "#93a7cc", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, transition: "all 0.2s" }}
+              onMouseEnter={e => { e.target.style.borderColor = "#38bdf8"; e.target.style.color = "#eef4ff"; }}
+              onMouseLeave={e => { e.target.style.borderColor = "#24324d"; e.target.style.color = "#93a7cc"; }}>
+              ← New Analysis
+            </button>
+          </div>
         )}
       </div>
 
@@ -423,7 +546,6 @@ export default function App() {
               <h1 style={{ fontSize: 36, fontWeight: 700, margin: 0, background: "linear-gradient(135deg, #eef4ff 0%, #38bdf8 50%, #3b82f6 100%)", backgroundSize: "200% 200%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", animation: "gradientShift 4s ease infinite" }}>AI Portfolio Analyzer</h1>
               <p style={{ color: "#9fb0d1", marginTop: 10, fontSize: 15 }}>Upload your holdings. Get deep analysis powered by AI.</p>
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: isEmbedded ? 20 : 32 }}>
               {[{ label: "ROCE/PE", weight: "25%", icon: "📈" }, { label: "Revenue Growth", weight: "15%", icon: "💹" }, { label: "RSI Signal", weight: "15%", icon: "📉" }, { label: "Market Cap", weight: "10%", icon: "🏢" }, { label: "Price/Book", weight: "10%", icon: "📚" }, { label: "FII/DII Trend", weight: "10%", icon: "🏛️" }, { label: "Liquidity", weight: "10%", icon: "💧" }, { label: "Event Catalyst", weight: "5%", icon: "⚡" }].map(r => (
                 <div key={r.label} style={{ background: "#111a2e", border: "1px solid #24324d", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
@@ -433,7 +555,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-
             <div style={{ background: "#111a2e", border: "1px solid #24324d", borderRadius: 16, padding: isEmbedded ? 18 : 24, marginBottom: 16 }}>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "#93a7cc", display: "block", marginBottom: 10 }}>Your Details (required)</label>
@@ -441,12 +562,10 @@ export default function App() {
                   {[{ type: "text", placeholder: "Full name", key: "name" }, { type: "email", placeholder: "Email", key: "email" }, { type: "tel", placeholder: "Phone number", key: "phone" }].map(f => (
                     <input key={f.key} type={f.type} placeholder={f.placeholder} value={userDetails[f.key]}
                       onChange={e => { setUserDetails(prev => ({ ...prev, [f.key]: e.target.value })); setError(""); }}
-                      style={{ width: "100%", background: "#0b1427", border: "1px solid #24324d", borderRadius: 8, color: "#eef4ff", fontSize: 13, padding: "10px 12px", fontFamily: "'Gothic A1', sans-serif" }}
-                    />
+                      style={{ width: "100%", background: "#0b1427", border: "1px solid #24324d", borderRadius: 8, color: "#eef4ff", fontSize: 13, padding: "10px 12px", fontFamily: "'Gothic A1', sans-serif" }} />
                   ))}
                 </div>
               </div>
-
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "#93a7cc" }}>Paste or Upload Portfolio CSV</label>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -459,15 +578,12 @@ export default function App() {
                   }} style={{ display: "none" }} />
                 </div>
               </div>
-
               {uploadedFileName && <div style={{ fontSize: 12, color: "#9fb0d1", marginBottom: 10 }}>Loaded file: <span style={{ color: "#38bdf8", fontWeight: 600 }}>{uploadedFileName}</span></div>}
               <textarea value={portfolioText} onChange={e => { setPortfolioText(normalizePortfolioCsv(e.target.value)); setError(""); }}
                 style={{ width: "100%", height: 160, background: "#0b1427", border: "1px solid #24324d", borderRadius: 8, color: "#eef4ff", fontSize: 13, padding: 12, fontFamily: "'Gothic A1', sans-serif", lineHeight: 1.7 }} />
               <div style={{ fontSize: 12, color: "#6f7fa3", marginTop: 8 }}>Required columns: Symbol, Quantity, AvgPrice, LTP (or CMP/Last Price)</div>
             </div>
-
             {error && <div style={{ background: "#2f1117", border: "1px solid #f87171", borderRadius: 8, padding: "10px 14px", marginBottom: 16, color: "#f87171", fontSize: 13 }}>{error}</div>}
-
             <button onClick={analyze} disabled={!hasPortfolioRows || !isDetailsValid}
               style={{ width: "100%", padding: "14px 24px", background: hasPortfolioRows && isDetailsValid ? "linear-gradient(135deg, #38bdf8, #3b82f6)" : "#24324d", border: "none", borderRadius: 10, color: hasPortfolioRows && isDetailsValid ? "#fff" : "#6f7fa3", fontSize: 15, fontWeight: 700, cursor: hasPortfolioRows && isDetailsValid ? "pointer" : "not-allowed", transition: "all 0.3s", letterSpacing: 0.5 }}>
               🔍 Analyze Portfolio with AI
@@ -478,14 +594,7 @@ export default function App() {
         {/* STREAMING + RESULTS */}
         {showResults && (
           <div style={{ animation: "fadeIn 0.5s ease" }}>
-
-            {isStreaming && (
-              <ProgressBar
-                done={progressDone} total={progressTotal}
-                currentBatch={currentBatch} totalBatches={totalBatches}
-                waitingMsg={waitingMsg}
-              />
-            )}
+            {isStreaming && <ProgressBar done={progressDone} total={progressTotal} currentBatch={currentBatch} totalBatches={totalBatches} waitingMsg={waitingMsg} />}
 
             {summary && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20, animation: "fadeSlideIn 0.5s ease" }}>
@@ -519,11 +628,9 @@ export default function App() {
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[...streamedStocks]
-                .sort((a, b) => b.weightedScore - a.weightedScore)
-                .map((stock, i) => (
-                  <StockCard key={stock.symbol} stock={stock} index={i} isNew={newStockSymbols.includes(stock.symbol)} />
-                ))}
+              {[...streamedStocks].sort((a, b) => b.weightedScore - a.weightedScore).map((stock, i) => (
+                <StockCard key={stock.symbol} stock={stock} index={i} isNew={newStockSymbols.includes(stock.symbol)} />
+              ))}
             </div>
 
             {error && streamedStocks.length > 0 && (
