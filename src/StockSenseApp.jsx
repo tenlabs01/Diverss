@@ -28,6 +28,9 @@ const FACTORS = [
   { key: "eventSensitivity", label: "Events", weight: "5%" },
 ];
 
+const CSV_HEADER = "Symbol,Quantity,AvgPrice,LTP";
+const CSV_STARTER = `${CSV_HEADER}\n`;
+
 function ScoreBar({ value }) {
   const pct = (value / 5) * 100;
   const color = value >= 4 ? "#2dd4bf" : value >= 3 ? "#f59e0b" : value >= 2 ? "#fb923c" : "#f87171";
@@ -166,7 +169,7 @@ export default function App() {
     email: "",
     phone: "",
   });
-  const [portfolioText, setPortfolioText] = useState("");
+  const [portfolioText, setPortfolioText] = useState(CSV_STARTER);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
@@ -175,7 +178,7 @@ export default function App() {
   const fileRef = useRef();
   const shellRef = useRef(null);
 
-  const SAMPLE = `Symbol,Quantity,AvgPrice,LTP
+  const SAMPLE = `${CSV_HEADER}
 BAJAJHFL,2216,126.83,87.57
 IREDA,920,204.66,124.75
 TATATECH,165,912.61,583.00
@@ -189,6 +192,29 @@ JIOFIN,530,355.21,256.25`;
   const isPhoneValid = cleanedPhone.length >= 10 && cleanedPhone.length <= 15;
   const isDetailsValid = Boolean(trimmedName) && isEmailValid && isPhoneValid;
 
+  const normalizePortfolioCsv = (text) => {
+    const input = (text || "").replace(/\r\n?/g, "\n");
+    const lines = input.split("\n");
+
+    while (lines.length && !lines[0].trim()) {
+      lines.shift();
+    }
+
+    if (!lines.length) {
+      return CSV_STARTER;
+    }
+
+    const normalizeHeader = (value) => value.trim().toLowerCase().replace(/\s+/g, "");
+    const hasHeader = normalizeHeader(lines[0]) === normalizeHeader(CSV_HEADER);
+
+    if (hasHeader) {
+      lines[0] = CSV_HEADER;
+      return lines.join("\n");
+    }
+
+    return [CSV_HEADER, ...lines].join("\n");
+  };
+
   const parsePortfolio = (text) => {
     const lines = text.trim().split("\n").filter(l => l.trim());
     if (lines.length < 2) return null;
@@ -200,6 +226,9 @@ JIOFIN,530,355.21,256.25`;
       return row;
     });
   };
+
+  const parsedPortfolio = parsePortfolio(portfolioText);
+  const hasPortfolioRows = Array.isArray(parsedPortfolio) && parsedPortfolio.length > 0;
 
   const downloadSampleCsv = () => {
     const blob = new Blob([`${SAMPLE}\n`], { type: "text/csv;charset=utf-8;" });
@@ -222,7 +251,7 @@ JIOFIN,530,355.21,256.25`;
     if (!file) return;
     try {
       const text = await file.text();
-      setPortfolioText(text);
+      setPortfolioText(normalizePortfolioCsv(text));
       setUploadedFileName(file.name);
       setError("");
     } catch {
@@ -238,8 +267,7 @@ JIOFIN,530,355.21,256.25`;
       return;
     }
 
-    const parsed = parsePortfolio(portfolioText);
-    if (!parsed || parsed.length === 0) {
+    if (!parsedPortfolio || parsedPortfolio.length === 0) {
       setError("Could not parse portfolio. Please check the format.");
       return;
     }
@@ -247,7 +275,7 @@ JIOFIN,530,355.21,256.25`;
     setStep("analyzing");
     setError("");
 
-    const portfolioDesc = parsed.map(r =>
+    const portfolioDesc = parsedPortfolio.map(r =>
       `${r.symbol || r.stock}: Qty=${r.quantity || r.qty}, AvgPrice=₹${r.avgprice || r["avg price"] || r.avgcost}, LTP=₹${r.ltp || r["last price"] || r.cmp || "unknown"}`
     ).join("\n");
 
@@ -380,7 +408,7 @@ JIOFIN,530,355.21,256.25`;
           </div>
         </div>
         {step === "results" && (
-          <button onClick={() => { setStep("upload"); setResult(null); setPortfolioText(""); }}
+          <button onClick={() => { setStep("upload"); setResult(null); setPortfolioText(CSV_STARTER); }}
             style={{
               background: "transparent", border: "1px solid #24324d", color: "#93a7cc",
               padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13,
@@ -550,8 +578,10 @@ JIOFIN,530,355.21,256.25`;
               )}
               <textarea
                 value={portfolioText}
-                onChange={e => setPortfolioText(e.target.value)}
-                placeholder={`Symbol,Quantity,AvgPrice,LTP\nRELIANCE,100,2400,2650\nINFY,50,1500,1720\n...`}
+                onChange={(e) => {
+                  setPortfolioText(normalizePortfolioCsv(e.target.value));
+                  setError("");
+                }}
                 style={{
                   width: "100%", height: 160,
                   background: "#0b1427", border: "1px solid #24324d",
@@ -575,14 +605,14 @@ JIOFIN,530,355.21,256.25`;
 
             <button
               onClick={analyze}
-              disabled={!portfolioText.trim() || !isDetailsValid}
+              disabled={!hasPortfolioRows || !isDetailsValid}
               style={{
                 width: "100%", padding: "14px 24px",
-                background: portfolioText.trim() && isDetailsValid
+                background: hasPortfolioRows && isDetailsValid
                   ? "linear-gradient(135deg, #38bdf8, #3b82f6)"
                   : "#24324d",
-                border: "none", borderRadius: 10, color: portfolioText.trim() && isDetailsValid ? "#fff" : "#6f7fa3",
-                fontSize: 15, fontWeight: 700, cursor: portfolioText.trim() && isDetailsValid ? "pointer" : "not-allowed",
+                border: "none", borderRadius: 10, color: hasPortfolioRows && isDetailsValid ? "#fff" : "#6f7fa3",
+                fontSize: 15, fontWeight: 700, cursor: hasPortfolioRows && isDetailsValid ? "pointer" : "not-allowed",
                 transition: "all 0.3s", letterSpacing: 0.5,
               }}
             >
