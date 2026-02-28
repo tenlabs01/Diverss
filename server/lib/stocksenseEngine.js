@@ -111,6 +111,7 @@ function buildStockSensePrompt(portfolioDescription) {
   ].join("\n");
 }
 
+// Analyzes a single batch of stocks (called once per batch from the API route)
 export async function analyzeStockSensePortfolio({
   portfolioDescription,
   apiKey,
@@ -128,8 +129,8 @@ export async function analyzeStockSensePortfolio({
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 8192, // ✅ Increased for large batches
-      stream: true,     // ✅ Streaming to avoid Vercel timeout
+      max_tokens: 4000, // ✅ 4000 is plenty for 10 stocks — faster response
+      stream: true,     // ✅ Streaming keeps connection alive
       system: STOCKSENSE_RULES_CONTEXT,
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -149,7 +150,7 @@ export async function analyzeStockSensePortfolio({
     );
   }
 
-  // Buffer streamed chunks into full text
+  // Buffer streamed response into full text
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let fullText = "";
@@ -188,68 +189,4 @@ export async function analyzeStockSensePortfolio({
     );
   }
   return parsed;
-}
-
-// ✅ Analyze large portfolios — all batches fire in parallel
-export async function analyzePortfolioInBatches({
-  portfolioDescription,
-  apiKey,
-  model = "claude-sonnet-4-20250514",
-  batchSize = 10,
-}) {
-  // Split CSV into header + data rows
-  const lines = portfolioDescription.trim().split("\n");
-  const header = lines[0];
-  const rows = lines.slice(1).filter((r) => r.trim()); // remove empty lines
-
-  // If small portfolio, just run directly — no batching needed
-  if (rows.length <= batchSize) {
-    return analyzeStockSensePortfolio({ portfolioDescription, apiKey, model });
-  }
-
-  // Split rows into batches of batchSize
-  const batches = [];
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batchRows = rows.slice(i, i + batchSize);
-    batches.push([header, ...batchRows].join("\n"));
-  }
-
-  console.log(
-    `Processing ${rows.length} stocks in ${batches.length} batches of ${batchSize}`
-  );
-
-  // ✅ Fire ALL batches in parallel at once — finishes in ~15s instead of 45s+
-  const allBatchResults = await Promise.all(
-    batches.map((batch) =>
-      analyzeStockSensePortfolio({ portfolioDescription: batch, apiKey, model })
-    )
-  );
-
-  // Merge all batch results into one unified response
-  const allStocks = allBatchResults.flatMap((r) => r.stocks || []);
-
-  const totalInvested = allStocks.reduce(
-    (sum, s) => sum + s.avgPrice * s.quantity,
-    0
-  );
-  const currentValue = allStocks.reduce(
-    (sum, s) => sum + s.ltp * s.quantity,
-    0
-  );
-  const totalPnL = currentValue - totalInvested;
-  const portfolioScore =
-    allStocks.reduce((sum, s) => sum + (s.weightedScore || 0), 0) /
-    allStocks.length;
-
-  console.log(`All ${batches.length} batches merged. Total stocks: ${allStocks.length}`);
-
-  return {
-    summary: {
-      totalInvested: +totalInvested.toFixed(2),
-      currentValue: +currentValue.toFixed(2),
-      totalPnL: +totalPnL.toFixed(2),
-      portfolioScore: +portfolioScore.toFixed(2),
-    },
-    stocks: allStocks,
-  };
 }
