@@ -1,5 +1,5 @@
 import {
-  analyzeStockSensePortfolio,
+  analyzePortfolioInBatches, // ✅ Changed from analyzeStockSensePortfolio
   UpstreamHttpError,
 } from "../../server/lib/stocksenseEngine.js";
 import {
@@ -23,7 +23,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const portfolioDescription = String(req.body?.portfolioDescription || "").trim();
+  const portfolioDescription = String(
+    req.body?.portfolioDescription || ""
+  ).trim();
   if (!portfolioDescription) {
     return res.status(400).json({ error: "Missing portfolioDescription." });
   }
@@ -35,34 +37,38 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY." });
+    return res
+      .status(500)
+      .json({ error: "Server is missing ANTHROPIC_API_KEY." });
   }
 
-  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+  const model =
+    process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
   try {
-    sendLeadToGoogleSheets({   // ✅ Fire and forget — don't await
-  userDetails: normalizedDetails.data,
-  portfolioDescription,
-  source: "stocksense-vercel",
-  meta: extractRequestMeta(req),
-}).catch((err) => {
-  console.error("Lead capture failed:", err?.message || err);
-});
+    // ✅ Fire and forget — don't await Google Sheets, it was blocking execution
+    sendLeadToGoogleSheets({
+      userDetails: normalizedDetails.data,
+      portfolioDescription,
+      source: "stocksense-vercel",
+      meta: extractRequestMeta(req),
+    }).catch((err) => {
+      console.error("Lead capture failed:", err?.message || err);
+    });
 
-const result = await analyzeStockSensePortfolio({
-  portfolioDescription,
-  apiKey,
-  model,
-});
+    // ✅ Use batching for large portfolios (50+ stocks)
+    const result = await analyzePortfolioInBatches({
+      portfolioDescription,
+      apiKey,
+      model,
+      batchSize: 10, // 10 stocks per Claude API call
+    });
 
-return res.status(200).json({ result });
     return res.status(200).json({ result });
   } catch (error) {
     if (error instanceof UpstreamHttpError) {
       return res.status(error.status).json({ error: error.message });
     }
-
     return res.status(500).json({
       error: error.message || "StockSense analysis failed.",
     });
