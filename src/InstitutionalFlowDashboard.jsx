@@ -584,18 +584,30 @@ export default function InstitutionalFlowDashboard() {
           </div>
         </div>
 
-        <div className="ifd-strategy">
-          <p>Strategic Intelligence</p>
-          <h3>Institutions Move Before Retail Reacts.</h3>
-          <div>
-            <p>
-      FII and DII activity often signals where smart money is positioning —
-      days or weeks before price reacts. Use this dashboard to spot
-      sector-level accumulation, distribution, and divergence patterns in
-      real time. When both institutions agree, momentum tends to follow.
-      When they diverge, volatility often spikes.
-    </p>
-          </div>
+        <div className="bg-[#015574] text-white rounded-2xl p-8 shadow-sm">
+  <span className="text-sm uppercase tracking-wider text-[#5de1e6]">
+    Strategic Intelligence
+  </span>
+
+  <h3 className="text-2xl font-semibold mt-2">
+    Institutions Move Before Retail Reacts.
+  </h3>
+
+  <p className="mt-4 text-gray-200 leading-relaxed">
+    FII and DII activity often signals where capital is positioning —
+    days or even weeks before price action reflects it.
+  </p>
+
+  <p className="mt-3 text-gray-200 leading-relaxed">
+    Use this dashboard to identify sector-level accumulation,
+    distribution, and divergence patterns in real time.
+  </p>
+
+  <p className="mt-4 font-medium text-[#60ebf0]">
+    When institutions align, momentum often follows.
+    When they diverge, volatility tends to increase.
+  </p>
+</div>
         </div>
       </div>
     </section>
