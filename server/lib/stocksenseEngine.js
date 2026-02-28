@@ -190,7 +190,7 @@ export async function analyzeStockSensePortfolio({
   return parsed;
 }
 
-// ✅ NEW: Analyze large portfolios in batches of 10
+// ✅ Analyze large portfolios — all batches fire in parallel
 export async function analyzePortfolioInBatches({
   portfolioDescription,
   apiKey,
@@ -202,12 +202,12 @@ export async function analyzePortfolioInBatches({
   const header = lines[0];
   const rows = lines.slice(1).filter((r) => r.trim()); // remove empty lines
 
-  // If small portfolio, just run directly
+  // If small portfolio, just run directly — no batching needed
   if (rows.length <= batchSize) {
     return analyzeStockSensePortfolio({ portfolioDescription, apiKey, model });
   }
 
-  // Split rows into batches
+  // Split rows into batches of batchSize
   const batches = [];
   for (let i = 0; i < rows.length; i += batchSize) {
     const batchRows = rows.slice(i, i + batchSize);
@@ -218,19 +218,14 @@ export async function analyzePortfolioInBatches({
     `Processing ${rows.length} stocks in ${batches.length} batches of ${batchSize}`
   );
 
-  // Process 2 batches in parallel at a time to stay within rate limits
-  const allBatchResults = [];
-  for (let i = 0; i < batches.length; i += 2) {
-    const parallelBatches = batches.slice(i, i + 2);
-    const results = await Promise.all(
-      parallelBatches.map((batch) =>
-        analyzeStockSensePortfolio({ portfolioDescription: batch, apiKey, model })
-      )
-    );
-    allBatchResults.push(...results);
-  }
+  // ✅ Fire ALL batches in parallel at once — finishes in ~15s instead of 45s+
+  const allBatchResults = await Promise.all(
+    batches.map((batch) =>
+      analyzeStockSensePortfolio({ portfolioDescription: batch, apiKey, model })
+    )
+  );
 
-  // Merge all batch results into one response
+  // Merge all batch results into one unified response
   const allStocks = allBatchResults.flatMap((r) => r.stocks || []);
 
   const totalInvested = allStocks.reduce(
@@ -245,6 +240,8 @@ export async function analyzePortfolioInBatches({
   const portfolioScore =
     allStocks.reduce((sum, s) => sum + (s.weightedScore || 0), 0) /
     allStocks.length;
+
+  console.log(`All ${batches.length} batches merged. Total stocks: ${allStocks.length}`);
 
   return {
     summary: {
