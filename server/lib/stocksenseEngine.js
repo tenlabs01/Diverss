@@ -126,7 +126,7 @@ function buildStockSensePrompt(portfolioDescription) {
 export async function analyzeStockSensePortfolio({
   portfolioDescription,
   apiKey,
-  model = "claude-sonnet-4-20250514",
+  model = "claude-haiku-4-5-20251001",
 }) {
   const userPrompt = buildStockSensePrompt(portfolioDescription);
   const response = await fetch("https://api.anthropic.com/v1/messages", {
